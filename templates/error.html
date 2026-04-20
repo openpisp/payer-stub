@@ -1,0 +1,7 @@
+<!-- Error partial — returned inline by HTMX for scan/consent errors -->
+<div class="alert alert-error" style="margin-top: 4px;">
+  <strong>{{ title }}:</strong> {{ detail }}
+</div>
+{% if retry_url %}
+<a href="{{ retry_url }}" class="btn btn-ghost mt-4">← Try again</a>
+{% endif %}

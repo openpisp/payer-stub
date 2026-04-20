@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block title %}Dispute Payment — PSP Pay{% endblock %}
+{% block nav_history %}active{% endblock %}
+
+{% block content %}
+
+<div class="card">
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+    <h1 style="margin:0;">Dispute Payment</h1>
+    <a href="/ui/payment/{{ payment_request_id }}"
+       class="btn btn-ghost" style="width:auto; padding:8px 16px; font-size:14px;">← Back</a>
+  </div>
+
+  {% if payment.amount %}
+  <div style="text-align:center; padding:12px 0 16px;">
+    <div class="amount">{{ payment.amount.display }}</div>
+    {% if payment.display_name %}
+    <div class="subtitle" style="margin-top:6px;">{{ payment.display_name }}</div>
+    {% endif %}
+    {% if payment.reference %}
+    <div class="history-meta">Ref: {{ payment.reference }}</div>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  <p style="font-size:14px; color:var(--muted); margin-bottom:16px;">
+    Tell us what went wrong with this payment. Your PISP will open a formal dispute
+    with the merchant's payment provider on your behalf.
+  </p>
+
+  {% if error %}
+  <div class="alert alert-error" style="margin-bottom:16px;">{{ error }}</div>
+  {% endif %}
+
+  <form method="post" action="/ui/payment/{{ payment_request_id }}/dispute"
+        style="display:flex; flex-direction:column; gap:16px;">
+
+    <div class="input-group">
+      <label for="reason_category">What is the reason for your dispute?</label>
+      <select id="reason_category" name="reason_category" required>
+        <option value="">— select a reason —</option>
+        {% for code, label in reason_labels.items() %}
+        <option value="{{ code }}">{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="input-group">
+      <label for="reason_text">Tell us more</label>
+      <input
+        id="reason_text"
+        name="reason_text"
+        type="text"
+        placeholder="e.g. I did not authorise this payment"
+        required
+        maxlength="500"
+      />
+    </div>
+
+    <button type="submit" class="btn btn-primary" style="margin-top:4px;">
+      Submit Dispute
+      <span class="spinner spin" aria-hidden="true"> ⏳</span>
+    </button>
+
+    <p style="font-size:12px; color:var(--muted); text-align:center;">
+      By submitting, you authorise your PISP to contact the merchant's payment provider
+      and initiate a formal dispute investigation.
+    </p>
+  </form>
+</div>
+
+{% endblock %}

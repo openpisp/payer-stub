@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}Scan & Pay — PSP Pay{% endblock %}
+{% block nav_pay %}active{% endblock %}
+
+{% block content %}
+
+<div class="card">
+  <h1>Scan & Pay</h1>
+  <p class="subtitle">Paste or type the QR code shown on the terminal</p>
+</div>
+
+<!--
+  Scan form — HTMX wires the submit to GET /ui/review?qr=<input value>.
+  The server parses the QR string (full psp://pay?... URI or bare UUID),
+  fetches the canonical payment record from the PISP identified in the URI,
+  and returns the review.html partial which is swapped into #result-area.
+
+  hx-indicator="#scan-btn" adds the .htmx-request CSS class to the button
+  while the request is in-flight, which shows the ⏳ spinner via CSS.
+-->
+<div class="card">
+  <form
+    hx-get="/ui/review"
+    hx-target="#result-area"
+    hx-swap="innerHTML"
+    hx-indicator="#scan-btn"
+  >
+    <div class="input-group">
+      <label for="qr">QR code or Payment ID</label>
+      <input
+        id="qr"
+        name="qr"
+        type="text"
+        placeholder="psp://pay?request_id=… or bare UUID"
+        autocomplete="off"
+        autocorrect="off"
+        autocapitalize="off"
+        spellcheck="false"
+        required
+        {% if prefill %}value="{{ prefill }}"{% endif %}
+      />
+      <span class="mono" style="font-size:11px; color:var(--muted); margin-top:4px;">
+        Accepts the full QR string (includes amount &amp; merchant) or a bare Payment Request ID
+      </span>
+    </div>
+    <div class="mt-4">
+      <button id="scan-btn" class="btn btn-primary" type="submit">
+        <span class="htmx-indicator spin">⏳</span>
+        <span class="btn-label">Review Payment</span>
+      </button>
+    </div>
+  </form>
+</div>
+
+<!-- Result / review / error loads here -->
+<div id="result-area">
+  {% if error %}
+  <div class="alert alert-error">{{ error }}</div>
+  {% endif %}
+</div>
+
+{% endblock %}

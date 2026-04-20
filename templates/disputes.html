@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}Disputes — PSP Pay{% endblock %}
+{% block nav_disputes %}active{% endblock %}
+
+{% block content %}
+
+<div class="card">
+  <h1 style="margin-bottom:4px;">Disputes</h1>
+  <p class="subtitle">Payments you have disputed with your bank.</p>
+</div>
+
+{% if error %}
+<div class="alert alert-error">{{ error }}</div>
+{% endif %}
+
+{% if not disputes and not error %}
+<div class="card" style="text-align:center; padding:32px 20px; color:var(--muted);">
+  <div style="font-size:48px; margin-bottom:8px;">⚖️</div>
+  <p style="font-size:15px; font-weight:600;">No disputes filed</p>
+  <p style="font-size:13px; margin-top:4px;">
+    If you believe a payment was made in error, open the payment from your History and tap <em>Dispute</em>.
+  </p>
+</div>
+{% endif %}
+
+{% for d in disputes %}
+{% set s = d.status %}
+<a href="/ui/disputes/{{ d.dispute_id }}" style="text-decoration:none; color:inherit;">
+  <div class="card" style="padding:16px 20px;">
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+      <div>
+        <div style="font-weight:700; font-size:15px;">
+          {{ reason_labels.get(d.reason_category, d.reason_category) }}
+        </div>
+        <div class="history-meta">PR: {{ d.pr_id[:12] if d.pr_id else '—' }}…</div>
+      </div>
+      <div style="text-align:right;">
+        {% if s == "OPEN" %}
+          <span class="badge badge-warn">Open</span>
+        {% elif s == "UNDER_REVIEW" %}
+          <span class="badge badge-blue">Under Review</span>
+        {% elif s == "ESCALATED" %}
+          <span class="badge badge-warn">Escalated</span>
+        {% elif s == "RESOLVED_UPHELD" %}
+          <span class="badge badge-success">Upheld ✓</span>
+        {% elif s == "RESOLVED_REJECTED" %}
+          <span class="badge badge-danger">Rejected</span>
+        {% elif s == "CLOSED" %}
+          <span class="badge badge-neutral">Closed</span>
+        {% else %}
+          <span class="badge badge-neutral">{{ s }}</span>
+        {% endif %}
+        <div class="history-meta" style="margin-top:4px;">
+          {{ d.created_at[:10] if d.created_at else '' }}
+        </div>
+      </div>
+    </div>
+  </div>
+</a>
+{% endfor %}
+
+{% endblock %}

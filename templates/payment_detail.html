@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% block title %}Payment — PSP Pay{% endblock %}
+{% block nav_history %}active{% endblock %}
+
+{% block content %}
+
+<div class="card">
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+    <h1 style="margin:0;">Payment Detail</h1>
+    <a href="/ui/history" class="btn btn-ghost">← History</a>
+  </div>
+
+  {% set s = outcome.status %}
+  <div style="text-align:center; padding:24px 0 16px;">
+    {% if s == "SETTLED" %}
+      <div style="font-size:48px; margin-bottom:8px;">✅</div>
+      <span class="badge badge-success" style="font-size:14px; padding:6px 16px;">SETTLED</span>
+    {% elif s == "REFUNDED" %}
+      <div style="font-size:48px; margin-bottom:8px;">↩️</div>
+      <span class="badge badge-warn" style="font-size:14px; padding:6px 16px;">REFUNDED</span>
+    {% elif s == "CANCELLED" %}
+      <div style="font-size:48px; margin-bottom:8px;">🚫</div>
+      <span class="badge badge-neutral" style="font-size:14px; padding:6px 16px;">CANCELLED</span>
+    {% elif s in ("DECLINED", "FAILED", "EXPIRED") %}
+      <div style="font-size:48px; margin-bottom:8px;">❌</div>
+      <span class="badge badge-danger" style="font-size:14px; padding:6px 16px;">{{ s }}</span>
+    {% elif s == "DISPATCHED" %}
+      <div style="font-size:48px; margin-bottom:8px;">🚀</div>
+      <span class="badge badge-blue" style="font-size:14px; padding:6px 16px;">DISPATCHED</span>
+    {% else %}
+      <div style="font-size:48px; margin-bottom:8px;">⏳</div>
+      <span class="badge badge-neutral" style="font-size:14px; padding:6px 16px;">{{ s or "—" }}</span>
+    {% endif %}
+  </div>
+
+  {% if outcome.amount is defined and outcome.amount %}
+  <div class="detail-row">
+    <span class="label">Amount</span>
+    <span class="value" style="font-weight:700; font-size:20px;">{{ outcome.amount.display }}</span>
+  </div>
+  {% endif %}
+
+  {% if outcome.reference %}
+  <div class="detail-row">
+    <span class="label">Reference</span>
+    <span class="value">{{ outcome.reference }}</span>
+  </div>
+  {% endif %}
+
+  {% if outcome.display_name %}
+  <div class="detail-row">
+    <span class="label">Merchant</span>
+    <span class="value">{{ outcome.display_name }}</span>
+  </div>
+  {% endif %}
+
+  {% if outcome.description %}
+  <div class="detail-row">
+    <span class="label">Description</span>
+    <span class="value">{{ outcome.description }}</span>
+  </div>
+  {% endif %}
+
+  {% if outcome.settlement_id %}
+  <div class="detail-row">
+    <span class="label">Settlement ID</span>
+    <span class="value mono" style="font-size:11px;">{{ outcome.settlement_id }}</span>
+  </div>
+  {% endif %}
+
+  <div class="detail-row">
+    <span class="label">Payment ID</span>
+    <span class="value mono" style="font-size:11px;">{{ outcome.payment_request_id }}</span>
+  </div>
+</div>
+
+{% if outcome.status == "SETTLED" and outcome.payment_request_id %}
+<a href="/ui/payment/{{ outcome.payment_request_id }}/dispute"
+   class="btn btn-outline"
+   style="margin-top:8px; color:var(--danger); border-color:var(--danger);">
+  ⚠️ Dispute this payment
+</a>
+{% endif %}
+
+{% endblock %}

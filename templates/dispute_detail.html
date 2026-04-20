@@ -1,0 +1,153 @@
+{% extends "base.html" %}
+{% block title %}Dispute — PSP Pay{% endblock %}
+{% block nav_disputes %}active{% endblock %}
+
+{% block content %}
+
+{% if error %}
+<div class="card">
+  <h1 style="margin-bottom:12px;">Dispute</h1>
+  <div class="alert alert-error">{{ error }}</div>
+  <a href="/ui/disputes" class="btn btn-ghost" style="margin-top:12px;">← Back to Disputes</a>
+</div>
+{% elif dispute %}
+
+{% set s = dispute.status %}
+<div class="card">
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+    <h1 style="margin:0;">Dispute</h1>
+    <a href="/ui/disputes" class="btn btn-ghost" style="width:auto; padding:8px 16px; font-size:14px;">← Back</a>
+  </div>
+
+  <!-- Status -->
+  <div style="text-align:center; padding:16px 0 20px;">
+    {% if s == "OPEN" %}
+      <div style="font-size:48px; margin-bottom:8px;">📋</div>
+      <span class="badge badge-warn" style="font-size:14px; padding:6px 16px;">Open — Awaiting review</span>
+    {% elif s == "UNDER_REVIEW" %}
+      <div style="font-size:48px; margin-bottom:8px;">🔍</div>
+      <span class="badge badge-blue" style="font-size:14px; padding:6px 16px;">Under Review</span>
+    {% elif s == "ESCALATED" %}
+      <div style="font-size:48px; margin-bottom:8px;">⬆️</div>
+      <span class="badge badge-warn" style="font-size:14px; padding:6px 16px;">Escalated to Scheme Authority</span>
+    {% elif s == "RESOLVED_UPHELD" %}
+      <div style="font-size:48px; margin-bottom:8px;">✅</div>
+      <span class="badge badge-success" style="font-size:14px; padding:6px 16px;">Resolved — Upheld in your favour</span>
+    {% elif s == "RESOLVED_REJECTED" %}
+      <div style="font-size:48px; margin-bottom:8px;">❌</div>
+      <span class="badge badge-danger" style="font-size:14px; padding:6px 16px;">Resolved — Claim rejected</span>
+    {% else %}
+      <div style="font-size:48px; margin-bottom:8px;">⚖️</div>
+      <span class="badge badge-neutral" style="font-size:14px; padding:6px 16px;">{{ s }}</span>
+    {% endif %}
+  </div>
+
+  <!-- Details -->
+  <div class="detail-row">
+    <span class="label">Reason</span>
+    <span class="value">{{ reason_labels.get(dispute.reason_category, dispute.reason_category) }}</span>
+  </div>
+  {% if dispute.reason_text %}
+  <div class="detail-row">
+    <span class="label">Description</span>
+    <span class="value" style="text-align:right; font-size:13px; max-width:220px;">{{ dispute.reason_text }}</span>
+  </div>
+  {% endif %}
+  <div class="detail-row">
+    <span class="label">Payment ID</span>
+    <span class="value mono">{{ dispute.pr_id[:16] if dispute.pr_id else '—' }}…</span>
+  </div>
+  <div class="detail-row">
+    <span class="label">Dispute ID</span>
+    <span class="value mono">{{ dispute.dispute_id[:16] if dispute.dispute_id else '—' }}…</span>
+  </div>
+  {% if dispute.eligibility_deadline %}
+  <div class="detail-row">
+    <span class="label">Deadline</span>
+    <span class="value" style="font-size:13px;">{{ dispute.eligibility_deadline[:10] }}</span>
+  </div>
+  {% endif %}
+  {% if dispute.created_at %}
+  <div class="detail-row">
+    <span class="label">Filed</span>
+    <span class="value" style="font-size:13px;">{{ dispute.created_at[:10] }}</span>
+  </div>
+  {% endif %}
+  {% if dispute.resolved_at %}
+  <div class="detail-row">
+    <span class="label">Resolved</span>
+    <span class="value" style="font-size:13px;">{{ dispute.resolved_at[:10] }}</span>
+  </div>
+  {% endif %}
+</div>
+
+<!-- Evidence list (if any) -->
+{% if dispute.evidence and dispute.evidence|length > 0 %}
+<div class="card">
+  <h2 style="margin-bottom:12px;">Evidence submitted</h2>
+  {% for ev in dispute.evidence %}
+  <div style="padding:10px 0; border-bottom:1px solid var(--border); font-size:14px;">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+      <div style="font-weight:600; font-size:13px;">{{ ev.content }}</div>
+      {% if ev.direction == 'PAYER' %}
+        <span class="badge badge-blue" style="font-size:10px;">You</span>
+      {% else %}
+        <span class="badge badge-neutral" style="font-size:10px;">Merchant</span>
+      {% endif %}
+    </div>
+    <div style="font-size:11px; color:var(--muted);">
+      {{ ev.kind }} · {{ ev.submitted_at[:16].replace('T', ' ') if ev.submitted_at else '' }}
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+<!-- Submit evidence (only while dispute is active) -->
+{% if s in ("OPEN", "UNDER_REVIEW") %}
+<div class="card">
+  <h2 style="margin-bottom:12px;">Add Evidence</h2>
+  {% if notice %}
+  <div class="alert alert-error" style="margin-bottom:12px;">{{ notice }}</div>
+  {% endif %}
+  <p style="font-size:13px; color:var(--muted); margin-bottom:14px;">
+    Provide supporting information for your dispute. This will be sent to the merchant's payment provider.
+  </p>
+  <form method="post" action="/ui/disputes/{{ dispute.dispute_id }}/evidence"
+        style="display:flex; flex-direction:column; gap:12px;">
+    <div class="input-group">
+      <label for="ev_kind">Type</label>
+      <select id="ev_kind" name="kind">
+        <option value="TEXT">Written statement</option>
+        <option value="DOCUMENT_URL">Document URL</option>
+      </select>
+    </div>
+    <div class="input-group">
+      <label for="ev_content">Content</label>
+      <input id="ev_content" name="content" type="text"
+             placeholder="Describe what happened or paste a URL…"
+             required maxlength="1000" />
+    </div>
+    <button type="submit" class="btn btn-primary">Submit Evidence</button>
+  </form>
+</div>
+{% endif %}
+
+<!-- What happens next -->
+{% if s in ("OPEN", "UNDER_REVIEW", "ESCALATED") %}
+<div class="alert alert-info">
+  <strong>What happens next?</strong><br>
+  Your PISP has notified the merchant's payment provider. They have up to
+  {% if dispute.eligibility_deadline %}{{ dispute.eligibility_deadline[:10] }}{% else %}the scheme deadline{% endif %}
+  to respond. You will see the status update here when a decision is reached.
+</div>
+{% endif %}
+
+{% else %}
+<div class="card">
+  <div class="alert alert-error">Dispute not found.</div>
+  <a href="/ui/disputes" class="btn btn-ghost" style="margin-top:12px;">← Back</a>
+</div>
+{% endif %}
+
+{% endblock %}

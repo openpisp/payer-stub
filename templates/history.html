@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}History — PSP Pay{% endblock %}
+{% block nav_history %}active{% endblock %}
+
+{% block content %}
+
+<div class="card">
+  <h1>Payment History</h1>
+  <p class="subtitle">Decisions made in this session</p>
+</div>
+
+<div class="card">
+  {% if history %}
+    {% for item in history | reverse %}
+    <a href="/ui/payment/{{ item.payment_request_id }}" style="text-decoration:none; color:inherit; display:block;">
+    <div class="history-item" style="cursor:pointer;">
+      <div style="flex:1;">
+        <div style="font-weight:600; font-size:15px;">
+          {{ item.amount.display if item.amount else "—" }}
+          &nbsp;
+          {% if item.status == "SETTLED" %}
+            <span class="badge badge-success">SETTLED</span>
+          {% elif item.status == "REFUNDED" %}
+            <span class="badge badge-warn">↩ REFUNDED</span>
+          {% elif item.status == "CANCELLED" %}
+            <span class="badge badge-neutral">CANCELLED</span>
+          {% elif item.status in ("DECLINED", "FAILED", "EXPIRED") %}
+            <span class="badge badge-danger">{{ item.status }}</span>
+          {% elif item.status == "DISPATCHED" %}
+            <span class="badge badge-blue">DISPATCHED</span>
+          {% else %}
+            <span class="badge badge-neutral">{{ item.status }}</span>
+          {% endif %}
+        </div>
+        {% if item.display_name %}
+        <div class="history-meta" style="margin-top:4px;">{{ item.display_name }}</div>
+        {% endif %}
+        {% if item.reference %}
+        <div class="history-meta">{{ item.reference }}</div>
+        {% endif %}
+      </div>
+      <div style="color:var(--muted); font-size:13px;">›</div>
+    </div>
+    </a>
+    {% endfor %}
+  {% else %}
+    <div class="text-center" style="padding: 32px 0; color: var(--muted);">
+      <div style="font-size:48px; margin-bottom:12px;">🕒</div>
+      <p>No payments yet this session.</p>
+      <a href="/ui/" class="btn btn-primary" style="margin-top:20px; display:inline-block; width:auto; padding:12px 28px;">
+        Make a Payment
+      </a>
+    </div>
+  {% endif %}
+</div>
+
+{% endblock %}

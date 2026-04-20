@@ -1,0 +1,72 @@
+<!-- Review card — returned as an HTMX partial into #result-area on the scan page -->
+<!-- pisp_url is forwarded to consent buttons so cross-PISP approval works correctly -->
+
+<div class="card">
+  <div class="text-center">
+    <p class="label">Payment to</p>
+    <h2 style="margin-top:4px; font-size:20px;">{{ pr.requester_display_name }}</h2>
+    {% if pr.requester_pisp_uri %}
+    <p class="mono" style="margin-top:4px; font-size:11px;">{{ pr.requester_pisp_uri }}</p>
+    {% endif %}
+  </div>
+
+  <div style="text-align:center; padding: 20px 0 16px;">
+    <p class="label">Amount</p>
+    <p class="amount">{{ pr.amount.display }}</p>
+  </div>
+
+  <div class="divider"></div>
+
+  <div style="margin-top:16px;">
+    <div class="detail-row">
+      <span class="label">Reference</span>
+      <span class="value">{{ pr.reference }}</span>
+    </div>
+    {% if pr.description %}
+    <div class="detail-row">
+      <span class="label">Description</span>
+      <span class="value">{{ pr.description }}</span>
+    </div>
+    {% endif %}
+    <div class="detail-row">
+      <span class="label">Expires</span>
+      <span class="value mono">{{ pr.expires_at[:16] | replace("T", " ") }} UTC</span>
+    </div>
+    <div class="detail-row">
+      <span class="label">Request ID</span>
+      <span class="value mono" style="font-size:11px;">{{ pr.payment_request_id }}</span>
+    </div>
+  </div>
+</div>
+
+<!-- Approve / Decline — pisp_url forwarded so consent goes to the right PISP -->
+{% set consent_base = "/ui/consent/" + pr.payment_request_id %}
+{% if pisp_url %}
+  {% set consent_base = consent_base + "?pisp_url=" + pisp_url %}
+  {% set approve_url = consent_base + "&approve=true" %}
+  {% set decline_url = consent_base + "&approve=false" %}
+{% else %}
+  {% set approve_url = consent_base + "?approve=true" %}
+  {% set decline_url = consent_base + "?approve=false" %}
+{% endif %}
+
+<div class="flex-col gap-8" id="decision-area">
+  <button
+    class="btn btn-success"
+    hx-post="{{ approve_url }}"
+    hx-target="#decision-area"
+    hx-swap="outerHTML"
+    hx-indicator="this"
+  >
+    ✅ Approve Payment
+  </button>
+  <button
+    class="btn btn-danger"
+    hx-post="{{ decline_url }}"
+    hx-target="#decision-area"
+    hx-swap="outerHTML"
+    hx-indicator="this"
+  >
+    ❌ Decline
+  </button>
+</div>

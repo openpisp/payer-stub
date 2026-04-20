@@ -1,0 +1,162 @@
+{% extends "base.html" %}
+{% block title %}IOU — PSP Pay{% endblock %}
+{% block nav_iou %}active{% endblock %}
+
+{% block content %}
+
+{% if mode == "home" %}
+<!-- ===================== Home: Issue + Present panels ===================== -->
+
+<div class="card">
+  <h1>🧾 IOU / Cheque</h1>
+  <p class="subtitle">Pre-authorise a payment or present a cheque you received.</p>
+</div>
+
+{% if error %}
+<div class="alert alert-error">{{ error }}</div>
+{% endif %}
+
+<!-- Issue IOU (A's perspective) -->
+<div class="card">
+  <h2>Issue a Cheque (A)</h2>
+  <p class="subtitle" style="margin-bottom:14px">Pre-authorise a debit from your account. Share the QR/URI with the payee.</p>
+  <form method="POST" action="/ui/iou/issue" class="flex-col" style="gap:12px">
+    <div class="input-group">
+      <label>Amount (£)</label>
+      <input type="number" name="amount_pounds" step="0.01" min="0.01" placeholder="10.00" required>
+    </div>
+    <div class="input-group">
+      <label>Reference</label>
+      <input type="text" name="reference" maxlength="18" placeholder="Invoice 42" required>
+    </div>
+    <div class="input-group">
+      <label>Description (optional)</label>
+      <input type="text" name="description" placeholder="Lunch split" />
+    </div>
+    <div class="input-group">
+      <label>Expires in (seconds)</label>
+      <input type="number" name="expires_in_seconds" value="3600" min="60" />
+    </div>
+    <div class="input-group">
+      <label>Restrict to payee URI (optional)</label>
+      <input type="text" name="payee_uri" placeholder="psp://pisp.openpisp.local/requester/acme" />
+    </div>
+    <button type="submit" class="btn btn-primary">Issue IOU</button>
+  </form>
+</div>
+
+<!-- Present IOU (B's perspective) -->
+<div class="card">
+  <h2>Present a Cheque (B)</h2>
+  <p class="subtitle" style="margin-bottom:14px">Paste the IOU URI or bare UUID you received from the payer.</p>
+  <form method="POST" action="/ui/iou/present" class="flex-col" style="gap:12px">
+    <div class="input-group">
+      <label>IOU URI or UUID</label>
+      <input type="text" name="iou_input" placeholder="psp://pay?iou_token=…  or  bare UUID" required>
+    </div>
+    <div class="input-group">
+      <label>Drawer's PISP URL (A's PISP base URL)</label>
+      <input type="text" name="pisp_url_a" placeholder="http://pisp:8000" />
+    </div>
+    <button type="submit" class="btn btn-success">Present IOU</button>
+  </form>
+</div>
+
+{% elif mode == "issued" %}
+<!-- ===================== Result: IOU issued ===================== -->
+
+<div class="card text-center">
+  <div class="status-icon">🧾</div>
+  <h1>IOU Issued</h1>
+  <p class="subtitle">Share the QR payload or URI with the payee. They can present it to their PISP.</p>
+</div>
+
+<div class="card">
+  <div class="detail-row">
+    <span class="label">Status</span>
+    <span class="value">
+      <span class="badge badge-success">{{ outcome.status }}</span>
+    </span>
+  </div>
+  <div class="detail-row">
+    <span class="label">IOU ID</span>
+    <span class="mono">{{ outcome.iou_id }}</span>
+  </div>
+  <div class="detail-row">
+    <span class="label">Expires at</span>
+    <span class="value">{{ outcome.expires_at }}</span>
+  </div>
+</div>
+
+<div class="card">
+  <p class="label" style="margin-bottom:8px">QR Payload (copy &amp; share)</p>
+  <div class="mono" style="word-break:break-all;padding:10px;background:var(--bg);border-radius:8px;font-size:11px">{{ outcome.qr_payload }}</div>
+  <button class="btn btn-outline mt-4" onclick="copyText('{{ outcome.qr_payload }}').then(()=>{this.textContent='Copied!';setTimeout(()=>this.textContent='Copy QR Payload',1500)})">Copy QR Payload</button>
+</div>
+
+<div class="card">
+  <p class="label" style="margin-bottom:8px">IOU URI</p>
+  <div class="mono" style="word-break:break-all;padding:10px;background:var(--bg);border-radius:8px;font-size:11px">{{ outcome.iou_uri }}</div>
+</div>
+
+<a href="/ui/iou" class="btn btn-ghost mt-4">Issue another IOU</a>
+
+{% elif mode == "result" %}
+<!-- ===================== Result: IOU presented / payment outcome ===================== -->
+
+{% set status = outcome.get("status", "UNKNOWN") %}
+<div class="card text-center">
+  {% if status == "SETTLED" %}
+    <div class="status-icon">✅</div>
+    <h1>Payment Complete</h1>
+    <p class="subtitle">The IOU was honoured and funds settled.</p>
+  {% elif status == "FAILED" %}
+    <div class="status-icon">❌</div>
+    <h1>Payment Failed</h1>
+    <p class="subtitle">The IOU could not be processed.</p>
+  {% else %}
+    <div class="status-icon">⏳</div>
+    <h1>Payment Pending</h1>
+    <p class="subtitle">Status: {{ status }}</p>
+  {% endif %}
+</div>
+
+<div class="card">
+  <div class="detail-row">
+    <span class="label">Status</span>
+    <span class="value">
+      {% if status == "SETTLED" %}
+        <span class="badge badge-success">{{ status }}</span>
+      {% elif status == "FAILED" %}
+        <span class="badge badge-danger">{{ status }}</span>
+      {% else %}
+        <span class="badge badge-warn">{{ status }}</span>
+      {% endif %}
+    </span>
+  </div>
+  {% if outcome.get("amount") %}
+  <div class="detail-row">
+    <span class="label">Amount</span>
+    <span class="value">{{ outcome.amount.display }}</span>
+  </div>
+  {% endif %}
+  {% if outcome.get("reference") %}
+  <div class="detail-row">
+    <span class="label">Reference</span>
+    <span class="value">{{ outcome.reference }}</span>
+  </div>
+  {% endif %}
+  {% if outcome.get("payment_request_id") %}
+  <div class="detail-row">
+    <span class="label">Payment ID</span>
+    <span class="mono">{{ outcome.payment_request_id }}</span>
+  </div>
+  {% endif %}
+</div>
+
+<a href="/ui/iou" class="btn btn-ghost mt-4">Back to IOU</a>
+<a href="/ui/" class="btn btn-outline mt-4" style="margin-top:8px">Scan &amp; Pay</a>
+
+{% endif %}
+
+{% endblock %}

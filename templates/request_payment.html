@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+{% block title %}Request Payment — PSP Pay{% endblock %}
+{% block nav_request %}active{% endblock %}
+
+{% block content %}
+
+<div class="card">
+  <h1>Request Payment</h1>
+  <p class="subtitle">Create a pay-me link to share with the person paying you</p>
+</div>
+
+{% if error %}
+<div class="alert alert-error">{{ error }}</div>
+{% endif %}
+
+{% if result %}
+<!-- Show the shareable QR / URI after creation -->
+<div class="card" style="text-align:center;">
+  <div style="font-size:32px; margin-bottom:8px;">✅</div>
+  <h2 style="margin-bottom:4px;">Payment Request Created</h2>
+  <p class="subtitle" style="margin-bottom:16px;">Share this link with the person who needs to pay you</p>
+
+  <div style="font-size:28px; font-weight:800; color:var(--brand); margin-bottom:4px;">
+    {{ result.amount.display }}
+  </div>
+  <div style="font-size:14px; color:var(--muted); margin-bottom:16px;">
+    {{ result.reference }}{% if result.description %} · {{ result.description }}{% endif %}
+  </div>
+
+  <!-- QR code -->
+  <div
+    id="qr-wrapper"
+    data-payload="{{ result.qr_payload }}"
+    style="display:flex; flex-direction:column; align-items:center; gap:8px; margin-bottom:16px;"
+  >
+    <div id="qr-canvas" style="line-height:0; border-radius:8px; overflow:hidden;"></div>
+  </div>
+
+  <!-- Copyable URI -->
+  <div style="background:var(--bg); border-radius:8px; padding:10px 12px; margin-bottom:12px; text-align:left;">
+    <p class="mono" style="word-break:break-all; user-select:all; font-size:11px;">{{ result.qr_payload }}</p>
+  </div>
+
+  <button
+    class="btn btn-primary btn-block"
+    onclick="copyText('{{ result.qr_payload }}').then(()=>{ this.textContent='✅ Copied!'; setTimeout(()=>this.textContent='Copy Link',1500); })"
+  >Copy Link</button>
+
+  <div style="margin-top:12px;">
+    <a href="/ui/request-payment" class="btn btn-ghost btn-block">New Request</a>
+  </div>
+
+  <script>
+  (function() {
+    var wrapper = document.getElementById("qr-wrapper");
+    var target  = document.getElementById("qr-canvas");
+    var payload = wrapper ? wrapper.dataset.payload : "";
+    if (!payload || !target) return;
+    var script = document.createElement("script");
+    script.src = "https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js";
+    script.onload = function() {
+      new QRCode(target, {
+        text: payload,
+        width: 200,
+        height: 200,
+        colorDark: "#111827",
+        colorLight: "#ffffff",
+        correctLevel: QRCode.CorrectLevel.M
+      });
+    };
+    document.head.appendChild(script);
+  })();
+  </script>
+</div>
+
+{% else %}
+<!-- Payment request form -->
+<div class="card">
+  <form method="post" action="/ui/request-payment">
+    <div class="input-group" style="margin-bottom:12px;">
+      <label for="amount">Amount (£) <span style="color:var(--danger);">*</span></label>
+      <input
+        id="amount"
+        name="amount_pounds"
+        type="number"
+        min="0.01"
+        step="0.01"
+        placeholder="0.00"
+        required
+        style="font-size:24px; font-weight:700; padding:14px;"
+      />
+    </div>
+
+    <div class="input-group" style="margin-bottom:12px;">
+      <label for="reference">Reference <span style="color:var(--danger);">*</span></label>
+      <input id="reference" name="reference" type="text" placeholder="e.g. Dinner split" required />
+    </div>
+
+    <div class="input-group" style="margin-bottom:12px;">
+      <label for="description">Note (optional)</label>
+      <input id="description" name="description" type="text" placeholder="e.g. My half of the pizza" />
+    </div>
+
+    <div class="input-group" style="margin-bottom:16px;">
+      <label for="expires">Expires in (seconds)</label>
+      <input id="expires" name="expires_in_seconds" type="number" min="30" max="86400" value="3600" />
+    </div>
+
+    <button type="submit" class="btn btn-primary btn-block">
+      Generate Payment Request →
+    </button>
+  </form>
+</div>
+{% endif %}
+
+{% endblock %}
