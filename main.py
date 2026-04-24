@@ -55,11 +55,9 @@ PAYER_DISPLAY_NAME = os.getenv("PAYER_DISPLAY_NAME", "Alice")
 #      Stub calls POST /payer/register (or POST /payer/auth on 409).
 #
 #   3. Static PAYER_URI — legacy fallback when no credentials are configured.
-PAYER_API_KEY        = os.getenv("PAYER_API_KEY", "")
-PAYER_EMAIL          = os.getenv("PAYER_EMAIL", "")
-PAYER_PASSWORD       = os.getenv("PAYER_PASSWORD", "")
-PAYER_SORT_CODE      = os.getenv("PAYER_SORT_CODE", "")
-PAYER_ACCOUNT_NUMBER = os.getenv("PAYER_ACCOUNT_NUMBER", "")
+PAYER_API_KEY  = os.getenv("PAYER_API_KEY", "")
+PAYER_EMAIL    = os.getenv("PAYER_EMAIL", "")
+PAYER_PASSWORD = os.getenv("PAYER_PASSWORD", "")
 
 # Static fallback URI — overridden by registration response when registration succeeds.
 _PAYER_URI_DEFAULT = os.getenv("PAYER_URI", "psp://pisp.openpisp.local/payer/alice")
@@ -87,8 +85,8 @@ async def _register_with_pisp() -> None:
 
     1. ``PAYER_API_KEY`` set — key pre-provisioned by stubs.py via portal
        machine API.  Calls ``GET /payer/account`` to retrieve payer_uri.
-    2. ``PAYER_EMAIL`` + ``PAYER_PASSWORD`` set — self-registers via
-       ``POST /payer/register`` (falls back to ``POST /payer/auth`` on 409).
+    2. ``PAYER_EMAIL`` + ``PAYER_PASSWORD`` set — authenticates via
+       ``POST /payer/auth``.  Payer account must already exist on the PISP.
     3. Neither set — uses the static ``PAYER_URI`` env var (legacy fallback).
     """
     global _payer_uri, _payer_api_key
@@ -128,57 +126,33 @@ async def _register_with_pisp() -> None:
         )
         return
 
-    # ── Mode 2: self-registration ───────────────────────────────────────────
+    # ── Mode 2: email/password auth ────────────────────────────────────────
     if not PAYER_EMAIL or not PAYER_PASSWORD:
-        log.info("Payer registration: no credentials configured — using static PAYER_URI env var")
+        log.info("Payer auth: no credentials configured — using static PAYER_URI env var")
         return
 
     for attempt in range(1, 6):
         try:
             async with httpx.AsyncClient() as client:
-                resp = await client.post(
-                    f"{PISP_URL}/payer/register",
-                    json={
-                        "email":          PAYER_EMAIL,
-                        "password":       PAYER_PASSWORD,
-                        "display_name":   PAYER_DISPLAY_NAME,
-                        "sort_code":      PAYER_SORT_CODE,
-                        "account_number": PAYER_ACCOUNT_NUMBER,
-                    },
+                auth = await client.post(
+                    f"{PISP_URL}/payer/auth",
+                    json={"email": PAYER_EMAIL, "password": PAYER_PASSWORD},
                     timeout=10.0,
                 )
-            if resp.status_code == 201:
-                data = resp.json()
+            if auth.status_code == 200:
+                data = auth.json()
                 _payer_uri     = data["payer_uri"]
                 _payer_api_key = data["api_key"]
-                log.info("Payer registered: uri=%s", _payer_uri)
+                log.info("Payer authenticated: uri=%s", _payer_uri)
                 return
-            if resp.status_code == 409:
-                # Already registered — re-authenticate to get a fresh key
-                async with httpx.AsyncClient() as client:
-                    auth = await client.post(
-                        f"{PISP_URL}/payer/auth",
-                        json={"email": PAYER_EMAIL, "password": PAYER_PASSWORD},
-                        timeout=10.0,
-                    )
-                if auth.status_code == 200:
-                    data = auth.json()
-                    _payer_uri     = data["payer_uri"]
-                    _payer_api_key = data["api_key"]
-                    log.info("Payer re-authenticated: uri=%s", _payer_uri)
-                    return
-                log.warning("Attempt %d: payer auth returned HTTP %s", attempt, auth.status_code)
-            else:
-                log.warning(
-                    "Attempt %d: payer register returned HTTP %s: %s",
-                    attempt, resp.status_code, resp.text[:200],
-                )
+            log.warning("Attempt %d: payer auth returned HTTP %s: %s",
+                        attempt, auth.status_code, auth.text[:200])
         except Exception as exc:
-            log.warning("Attempt %d: could not reach PISP for payer registration: %s", attempt, exc)
+            log.warning("Attempt %d: could not reach PISP for payer auth: %s", attempt, exc)
         if attempt < 5:
             await asyncio.sleep(2 * attempt)   # 2 s, 4 s, 6 s, 8 s
 
-    log.error("Payer registration failed after 5 attempts — using static _payer_uri %s", _payer_uri)
+    log.error("Payer auth failed after 5 attempts — using static _payer_uri %s", _payer_uri)
 
 
 async def _fetch_pisp_capabilities() -> None:
