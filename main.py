@@ -485,30 +485,42 @@ async def ui_home(request: Request, qr: Optional[str] = None):
 @app.get("/ui/review", response_class=HTMLResponse, tags=["UI"], include_in_schema=False)
 async def ui_review(request: Request, qr: str):
     """
-    HTMX partial: parse QR payload, show pre-filled details from QR immediately,
-    then fetch the canonical payment request from the payer PISP.
+    HTMX partial: resolve a payment URI and show the review screen.
 
-    The `qr` param accepts the same two forms as /ui/ (full URI or bare UUID).
+    Accepts:
+      - A full ``psp://`` URI  (e.g. ``psp://pisp.openpisp.local/pay/...``)
+      - A bare UUID            (treated as a same-PISP payment request ID)
 
-    The payer app always talks to its own PISP (PISP_URL). For cross-PISP
-    scenarios the QR carries the requester PISP URI (`pisp=` param), which is
-    forwarded to the payer PISP so it can fetch the payment request from the
-    requester PISP on the payer's behalf.
+    The URI is passed opaquely to the payer PISP's ``POST /payer/resolve``
+    endpoint.  The payer app never parses path segments beyond the host.
 
-    All flavours:
-      Flavour 3 / 1  — same PISP holds both sides, `pisp` param not needed.
-      Flavour 4 / 2  — payer PISP fetches from requester PISP using `pisp=` URI.
+    Mandate URIs (``psp://{host}/mandate/{id}``) are routed to the mandate
+    draw flow instead of the normal payment review.
     """
-    qr_data = _parse_qr(qr)
-    payment_request_id = qr_data.get("request_id")
-    qr_token  = qr_data.get("qr_token")
-    mandate_id = qr_data.get("mandate_id")
+    from urllib.parse import urlparse as _urlparse
 
-    # UC4: mandate QR scanned — draw against it immediately
-    if mandate_id:
-        pisp_url_a = qr_data.get("pisp_url") or PISP_URL  # A's PISP base URL from QR
-        from urllib.parse import urlencode as _ue
-        _iou_body = {"presenter_uri": _payer_uri, "pisp_url": pisp_url_a}
+    raw = (qr or "").strip()
+
+    # Bare UUID → build a full psp:// URI using the local PISP host
+    _uuid_re = r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+    if re.match(_uuid_re, raw, re.IGNORECASE):
+        pisp_host = PISP_URL.replace("https://", "").replace("http://", "").rstrip("/")
+        raw = f"psp://{pisp_host}/pay/{raw}"
+
+    if not raw.startswith("psp://"):
+        return templates.TemplateResponse(
+            request,
+            "error.html",
+            _tpl_ctx(request, title="Invalid URI", detail="Expected a psp:// URI or bare UUID.", retry_url="/ui/"),
+            status_code=400,
+        )
+
+    # Mandate URIs: draw against the mandate immediately (UC4)
+    _parsed = _urlparse("http://" + raw[len("psp://"):])
+    _parts = [p for p in _parsed.path.split("/") if p]
+    if len(_parts) >= 2 and _parts[0] == "mandate":
+        mandate_id = _parts[1]
+        _iou_body = {"presenter_uri": _payer_uri}
         async with httpx.AsyncClient() as client:
             resp = await client.post(
                 f"{PISP_URL}/payer/mandates/{mandate_id}/draw",
@@ -520,88 +532,55 @@ async def ui_review(request: Request, qr: str):
             outcome = resp.json()
             payment_history[str(outcome.get("payment_request_id", "iou"))] = outcome
             return templates.TemplateResponse(
-                request,
-                "iou.html",
+                request, "iou.html",
                 _tpl_ctx(request, mode="result", outcome=outcome, error=None),
             )
         detail = resp.json().get("detail", resp.text) if resp.content else resp.text
         return templates.TemplateResponse(
-            request,
-            "error.html",
+            request, "error.html",
             _tpl_ctx(request, title="IOU Error", detail=detail, retry_url="/ui/iou"),
             status_code=resp.status_code,
         )
 
-    if not payment_request_id and not qr_token:
-        return templates.TemplateResponse(
-            request,
-            "error.html",
-            _tpl_ctx(request, title="Invalid QR", detail="Could not extract a payment request ID.", retry_url="/ui/"),
-            status_code=400,
-        )
-
-    requester_pisp_uri = qr_data.get("pisp_uri")
-    requester_pisp_url = qr_data.get("pisp_url")
-    from urllib.parse import urlencode
-
-    if qr_token:
-        # Static QR (UC2/UC3): resolve token via payer PISP, which fetches
-        # from the requester PISP when the token is not local (cross-PISP).
-        fetch_url = f"{PISP_URL}/payer/qr-tokens/{qr_token}"
-        params: dict = {}
-        if requester_pisp_url:
-            params["pisp_url"] = requester_pisp_url
-        if params:
-            fetch_url += "?" + urlencode(params)
-    else:
-        # Normal payment request QR: fetch from payer PISP (which fetches peer if needed).
-        fetch_url = f"{PISP_URL}/payer/requests/{payment_request_id}"
-        params = {}
-        if requester_pisp_uri:
-            params["pisp"] = requester_pisp_uri
-        if requester_pisp_url:
-            params["pisp_url"] = requester_pisp_url
-        if params:
-            fetch_url += "?" + urlencode(params)
-
+    # All other URIs: resolve via POST /payer/resolve — URI is opaque to the stub
+    resolve_body = {"uri": raw}
     async with httpx.AsyncClient() as client:
-        resp = await client.get(fetch_url, timeout=10.0)
+        resp = await client.post(
+            f"{PISP_URL}/payer/resolve",
+            json=resolve_body,
+            headers=_sign_payer_request(resolve_body),
+            timeout=10.0,
+        )
 
     if resp.status_code == 404:
         return templates.TemplateResponse(
-            request,
-            "error.html",
+            request, "error.html",
             _tpl_ctx(request, title="Not Found", detail="Payment request not found.", retry_url="/ui/"),
             status_code=404,
         )
     if resp.status_code == 410:
         return templates.TemplateResponse(
-            request,
-            "error.html",
+            request, "error.html",
             _tpl_ctx(request, title="Expired", detail="This payment request has expired.", retry_url="/ui/"),
             status_code=410,
         )
     if resp.status_code == 409:
         detail = resp.json().get("detail", "Payment already processed.")
         return templates.TemplateResponse(
-            request,
-            "error.html",
+            request, "error.html",
             _tpl_ctx(request, title="Already Processed", detail=detail, retry_url="/ui/"),
             status_code=409,
         )
     if resp.status_code != 200:
         return templates.TemplateResponse(
-            request,
-            "error.html",
+            request, "error.html",
             _tpl_ctx(request, title="Error", detail=f"PISP returned {resp.status_code}.", retry_url="/ui/"),
             status_code=502,
         )
 
-    pr = resp.json()
-    # Consent always goes back to the payer's own PISP (PISP_URL).
+    pr = _normalise_pr(resp.json())
     return templates.TemplateResponse(
-        request,
-        "review.html",
+        request, "review.html",
         _tpl_ctx(request, pr=pr, pisp_url=PISP_URL),
     )
 
