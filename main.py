@@ -14,6 +14,7 @@ import hashlib
 import json as _json
 import logging
 import os
+import re
 from typing import Optional
 from urllib.parse import parse_qs, quote, urlparse
 from uuid import UUID
