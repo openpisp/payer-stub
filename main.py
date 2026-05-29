@@ -579,7 +579,7 @@ async def ui_review(request: Request, qr: str):
             status_code=502,
         )
 
-    pr = _normalise_pr(resp.json())
+    pr = resp.json()
     return templates.TemplateResponse(
         request, "review.html",
         _tpl_ctx(request, pr=pr, pisp_url=PISP_URL),
