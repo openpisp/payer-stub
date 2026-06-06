@@ -346,7 +346,7 @@ def _make_fiat_amount(pence: int, asset_code: str = "GBP") -> dict:
     symbols = {"GBP": "£", "EUR": "€", "USD": "$"}
     symbol = symbols.get(asset_code, asset_code + " ")
     return {
-        "value":       pence,
+        "value":       str(pence),
         "asset_kind":  "fiat",
         "asset_code":  asset_code,
         "minor_units": 2,
