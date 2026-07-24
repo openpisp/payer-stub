@@ -27,3 +27,8 @@ docker run -p 8000:8000 \
 ## Part of the OpenPISP Reference Implementation
 
 See [openpisp/reference-implementation](https://github.com/openpisp/reference-implementation).
+
+## Roadmap & release history
+
+- **Roadmap** — tracked org-wide on the [OpenPISP Roadmap board](https://github.com/orgs/openpisp/projects/4); no roadmap files live in this repo.
+- **Release history** — recorded in `CHANGELOG.md` (Keep a Changelog format; added at first tagged release).
